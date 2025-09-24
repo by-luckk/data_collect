@@ -1,5 +1,5 @@
 
-sudo /home/slam/miniconda3/envs/xhand/bin/python xhand_control_python_v1.2.10_20241130_release/xhand_control_python/xhand_control_example.py 
+sudo /home/slam/miniconda3/envs/xhand/bin/python xhand_control_example.py 
 
 # XHand数据记录脚本使用方法
 
