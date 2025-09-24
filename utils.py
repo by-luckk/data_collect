@@ -30,7 +30,7 @@ def visualize_raw_pressure(json_path="xhand_pressure_data.json", finger_index=0)
 def create_pressure_visualization(pressure_data, window_size=(800, 600)):
     """
     实时创建五个手指的压力可视化图像
-    x分量用颜色深浅表示，yz分量用箭头表示
+    z分量用颜色深浅表示，xy分量用箭头表示，图像逆时针旋转90度
     
     Args:
         pressure_data: 压力传感器数据列表，每个元素包含5个手指的数据
@@ -51,8 +51,8 @@ def create_pressure_visualization(pressure_data, window_size=(800, 600)):
     finger_height = window_size[1]
     
     # 固定最大值
-    x_max = 20.0
-    yz_max = 5.0
+    z_max = 20.0  # z分量用于颜色显示
+    xy_max = 5.0  # xy分量用于箭头显示
     
     for finger_idx in range(5):
         if finger_idx >= len(pressure_data):
@@ -81,16 +81,16 @@ def create_pressure_visualization(pressure_data, window_size=(800, 600)):
         # 创建手指区域画布
         finger_canvas = np.zeros((finger_height, finger_width, 3), dtype=np.uint8)
         
-        # 1. 用x分量设置背景颜色深浅
-        fx_clipped = np.clip(fx_grid, 0, x_max)
-        fx_normalized = (fx_clipped / x_max * 255).astype(np.uint8)
-        fx_colored = cv2.applyColorMap(fx_normalized, cv2.COLORMAP_VIRIDIS)
+        # 1. 用z分量设置背景颜色深浅
+        fz_clipped = np.clip(fz_grid, 0, z_max)
+        fz_normalized = (fz_clipped / z_max * 255).astype(np.uint8)
+        fz_colored = cv2.applyColorMap(fz_normalized, cv2.COLORMAP_VIRIDIS)
         
         # 调整颜色图像大小并作为背景
-        fx_resized = cv2.resize(fx_colored, (finger_width, finger_height))
-        finger_canvas = fx_resized.copy()
+        fz_resized = cv2.resize(fz_colored, (finger_width, finger_height))
+        finger_canvas = fz_resized.copy()
         
-        # 2. 绘制yz分量的箭头
+        # 2. 绘制xy分量的箭头
         # 计算每个网格点的位置
         grid_height = finger_height // 10
         grid_width = finger_width // 12
@@ -101,19 +101,19 @@ def create_pressure_visualization(pressure_data, window_size=(800, 600)):
                 center_x = col * grid_width + grid_width // 2
                 center_y = row * grid_height + grid_height // 2
                 
-                # 获取该点的yz分量
+                # 获取该点的xy分量
+                fx_val = fx_grid[row, col]
                 fy_val = fy_grid[row, col]
-                fz_val = fz_grid[row, col]
                 
-                # 只有当yz分量不为0时才画箭头
-                if abs(fy_val) > 0.01 or abs(fz_val) > 0.01:
-                    # 归一化yz分量到箭头长度
-                    fy_norm = fy_val / yz_max
-                    fz_norm = fz_val / yz_max
+                # 只有当xy分量不为0时才画箭头
+                if abs(fx_val) > 0.01 or abs(fy_val) > 0.01:
+                    # 归一化xy分量到箭头长度
+                    fx_norm = fx_val / xy_max
+                    fy_norm = fy_val / xy_max
                     
-                    # 计算箭头终点（注意y轴方向相反）
-                    end_x = center_x + int(fy_norm * grid_width * 0.4)
-                    end_y = center_y - int(fz_norm * grid_height * 0.4)  # y轴翻转
+                    # 计算箭头终点
+                    end_x = center_x + int(fx_norm * grid_width * 0.4)
+                    end_y = center_y + int(fy_norm * grid_height * 0.4)
                     
                     # 限制箭头在网格内
                     end_x = max(0, min(finger_width-1, end_x))
