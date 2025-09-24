@@ -27,7 +27,7 @@ def visualize_raw_pressure(json_path="xhand_pressure_data.json", finger_index=0)
     plt.ylabel("Row")
     plt.savefig(f"results/xhand_pressure_data_finger_{finger_index}.png")
 
-def create_pressure_visualization(pressure_data, window_size=(800, 600)):
+def create_pressure_visualization(pressure_data, window_size=(1000, 300)):
     """
     实时创建五个手指的压力可视化图像
     x分量用颜色深浅表示，yz分量用箭头表示
@@ -51,8 +51,8 @@ def create_pressure_visualization(pressure_data, window_size=(800, 600)):
     finger_height = window_size[1]
     
     # 固定最大值
-    x_max = 20.0
-    yz_max = 5.0
+    x_max = 10.0
+    yz_max = 10.0
     
     for finger_idx in range(5):
         if finger_idx >= len(pressure_data):
