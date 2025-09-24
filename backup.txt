@@ -1,1 +1,22 @@
+
 sudo /home/slam/miniconda3/envs/xhand/bin/python xhand_control_python_v1.2.10_20241130_release/xhand_control_python/xhand_control_example.py 
+
+# XHand数据记录脚本使用方法
+
+# 1. 只记录xhand数据（不包含RealSense，带实时可视化）
+sudo /home/slam/miniconda3/envs/xhand/bin/python recorded_xhand_only.py
+
+# 2. 记录xhand数据+RealSense RGB图像
+sudo /home/slam/miniconda3/envs/xhand/bin/python recorded_pressure_rgb.py
+
+# 3. 记录xhand数据+RealSense RGBD图像
+sudo /home/slam/miniconda3/envs/xhand/bin/python recorded_with_realsense.py
+
+# 注意事项：
+# - 确保xhand设备已连接并初始化
+# - 按回车键开始录制
+# - 数据保存在对应目录的json文件中
+# - 实时可视化窗口显示五个手指的压力分布：
+#   * X分量用颜色深浅表示（最大值20）
+#   * YZ分量用白色箭头表示（最大值5）
+#   * 按'q'键可提前退出 
