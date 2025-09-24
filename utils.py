@@ -27,125 +27,146 @@ def visualize_raw_pressure(json_path="xhand_pressure_data.json", finger_index=0)
     plt.ylabel("Row")
     plt.savefig(f"results/xhand_pressure_data_finger_{finger_index}.png")
 
+import os
+import numpy as np
+import json
+import matplotlib.pyplot as plt
+import cv2
+
 def create_pressure_visualization(pressure_data, window_size=(1000, 300)):
     """
     实时创建五个手指的压力可视化图像
     z分量用颜色深浅表示，xy分量用箭头表示，图像逆时针旋转90度
-    
+    新的网格为12行10列，力的方向为 y朝上, x朝右
+
     Args:
         pressure_data: 压力传感器数据列表，每个元素包含5个手指的数据
         window_size: 窗口大小 (width, height)
-    
+
     Returns:
         cv2图像数组，用于显示
     """
     if len(pressure_data) < 5:
         print(f"Warning: Expected 5 fingers, got {len(pressure_data)}")
         return None
-    
+
     # 创建空白画布
     canvas = np.zeros((window_size[1], window_size[0], 3), dtype=np.uint8)
-    
+
     # 每个手指的显示区域大小
     finger_width = window_size[0] // 5
     finger_height = window_size[1]
-    
+
     # 固定最大值
-    z_max = 20.0  # z分量用于颜色显示
+    z_max = 10.0  # z分量用于颜色显示
     xy_max = 5.0  # xy分量用于箭头显示
-    
+
     for finger_idx in range(5):
         if finger_idx >= len(pressure_data):
             continue
-            
+
         sensor_data = pressure_data[finger_idx]
         raw_pressure = sensor_data.get("raw_pressure", [])
-        
+
         if len(raw_pressure) != 120:
             continue
-            
+
         # 提取xyz分量
-        fx_values = np.array([p[0] for p in raw_pressure])  # fx分量
-        fy_values = np.array([p[1] for p in raw_pressure])  # fy分量
-        fz_values = np.array([p[2] for p in raw_pressure])  # fz分量
-        
-        # reshape为10x12
+        fx_values = np.array([p[0] for p in raw_pressure])
+        fy_values = np.array([p[1] for p in raw_pressure])
+        fz_values = np.array([p[2] for p in raw_pressure])
+
+        # 保持原始的reshape方式 (10x12)
         fx_grid = fx_values.reshape((10, 12))
         fy_grid = fy_values.reshape((10, 12))
         fz_grid = fz_values.reshape((10, 12))
-        
+
+        # 【核心改动】将网格数据逆时针旋转90度，得到 12x10 的新网格用于显示
+        fx_grid_rot = np.rot90(fx_grid)
+        fy_grid_rot = np.rot90(fy_grid)
+        fz_grid_rot = np.rot90(fz_grid)
+
         # 计算显示位置
         x_start = finger_idx * finger_width
-        x_end = (finger_idx + 1) * finger_width
         
         # 创建手指区域画布
         finger_canvas = np.zeros((finger_height, finger_width, 3), dtype=np.uint8)
-        
-        # 1. 用z分量设置背景颜色深浅
-        fz_clipped = np.clip(fz_grid, 0, z_max)
+
+        # 1. 用旋转后的z分量设置背景颜色深浅
+        fz_clipped = np.clip(fz_grid_rot, 0, z_max)
         fz_normalized = (fz_clipped / z_max * 255).astype(np.uint8)
         fz_colored = cv2.applyColorMap(fz_normalized, cv2.COLORMAP_VIRIDIS)
         
-        # 调整颜色图像大小并作为背景
-        fz_resized = cv2.resize(fz_colored, (finger_width, finger_height))
+        # 调整颜色图像大小并作为背景，使用最近邻插值使网格更清晰
+        fz_resized = cv2.resize(fz_colored, (finger_width, finger_height), interpolation=cv2.INTER_NEAREST)
         finger_canvas = fz_resized.copy()
-        
+
         # 2. 绘制xy分量的箭头
-        # 计算每个网格点的位置
-        grid_height = finger_height // 10
-        grid_width = finger_width // 12
-        
-        for row in range(10):
-            for col in range(12):
+        # 【核心改动】根据旋转后的 12x10 网格计算每个单元格的大小
+        grid_rows, grid_cols = 12, 10
+        grid_height = finger_height // grid_rows
+        grid_width = finger_width // grid_cols
+
+        # 【核心改动】遍历新的 12x10 网格
+        for row in range(grid_rows):
+            for col in range(grid_cols):
                 # 计算箭头中心位置
                 center_x = col * grid_width + grid_width // 2
                 center_y = row * grid_height + grid_height // 2
-                
-                # 获取该点的xy分量
-                fx_val = fx_grid[row, col]
-                fy_val = fy_grid[row, col]
-                
+
+                # 【核心改动】根据旋转关系，映射力的方向
+                # 原始的 fx (沿12的方向) 旋转后变为 y (上下) 方向的力
+                # 原始的 fy (沿10的方向) 旋转后变为 x (左右) 方向的力
+                # 要求 x朝右, y朝上，因此:
+                #   - 新的 x 分量 = -fy_original
+                #   - 新的 y 分量 = fx_original
+                fx_component_for_arrow = -fy_grid_rot[row, col]
+                fy_component_for_arrow = fx_grid_rot[row, col]
+
                 # 只有当xy分量不为0时才画箭头
-                if abs(fx_val) > 0.01 or abs(fy_val) > 0.01:
+                if abs(fx_component_for_arrow) > 0.01 or abs(fy_component_for_arrow) > 0.01:
                     # 归一化xy分量到箭头长度
-                    fx_norm = fx_val / xy_max
-                    fy_norm = fy_val / xy_max
-                    
+                    fx_norm = fx_component_for_arrow / xy_max
+                    fy_norm = fy_component_for_arrow / xy_max
+
                     # 计算箭头终点
+                    # fx_norm 控制水平方向 (x朝右为正)
+                    # fy_norm 控制垂直方向 (y朝上，在cv2坐标系中为负)
                     end_x = center_x + int(fx_norm * grid_width * 0.4)
-                    end_y = center_y + int(fy_norm * grid_height * 0.4)
-                    
+                    end_y = center_y - int(fy_norm * grid_height * 0.4) # 减号实现y朝上
+
                     # 限制箭头在网格内
-                    end_x = max(0, min(finger_width-1, end_x))
-                    end_y = max(0, min(finger_height-1, end_y))
-                    
+                    end_x = max(0, min(finger_width - 1, end_x))
+                    end_y = max(0, min(finger_height - 1, end_y))
+
                     # 计算箭头长度
                     arrow_length = np.sqrt((end_x - center_x)**2 + (end_y - center_y)**2)
-                    
+
                     # 只有当箭头长度足够大时才绘制
                     if arrow_length > 2:
                         # 绘制箭头（白色，粗细根据长度调整）
                         thickness = max(1, min(3, int(arrow_length / 5)))
-                        cv2.arrowedLine(finger_canvas, 
-                                      (center_x, center_y), 
-                                      (end_x, end_y), 
-                                      (255, 255, 255),  # 白色箭头
-                                      thickness, 
-                                      tipLength=0.3)
-        
+                        cv2.arrowedLine(finger_canvas,
+                                        (center_x, center_y),
+                                        (end_x, end_y),
+                                        (255, 255, 255),  # 白色箭头
+                                        thickness,
+                                        tipLength=0.3)
+
         # 将手指画布放置到主画布上
+        x_end = (finger_idx + 1) * finger_width
         canvas[:, x_start:x_end] = finger_canvas
-        
+
         # 添加手指标签
-        cv2.putText(canvas, f"F{finger_idx}", 
-                   (x_start + 5, 20), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        
+        cv2.putText(canvas, f"F{finger_idx}",
+                    (x_start + 5, 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
         # 添加压力值信息
         calc_pressure = sensor_data.get("calc_pressure", [0, 0, 0])
         pressure_text = f"X:{calc_pressure[0]:.1f} Y:{calc_pressure[1]:.1f} Z:{calc_pressure[2]:.1f}"
-        cv2.putText(canvas, pressure_text, 
-                   (x_start + 5, finger_height - 10), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
-    
+        cv2.putText(canvas, pressure_text,
+                    (x_start + 5, finger_height - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+
     return canvas
