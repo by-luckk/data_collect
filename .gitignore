@@ -1,0 +1,7 @@
+*__pytcache__/
+*.pyc
+.env
+*.so
+*.so*
+*.egg
+*.log
